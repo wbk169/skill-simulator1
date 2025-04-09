@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>技能種類與技能點數洗技模擬器</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+      h1 {
+        margin-bottom: 10px;
+      }
+      .option-group {
+        margin-bottom: 10px;
+      }
+      /* 讓表格有基本邊框與間距 */
+      #result {
+        margin-top: 20px;
+        padding: 10px;
+        border: 1px solid #ccc;
+      }
+      table {
+        border-collapse: collapse;
+        margin-top: 5px;
+        width: 300px; /* 可視需要自行調整 */
+      }
+      td, th {
+        padding: 5px 10px;
+        border: 1px solid #ccc;
+      }
+      /* ---- 下面改成「底色填滿」的方式 ---- */
+      .gold {
+        background-color: gold;
+        color: black;
+      }
+      .silver {
+        background-color: silver;
+        color: black;
+      }
+      .bronze {
+        background-color: #cd7f32; /* 古銅色 */
+        color: white;
+      }
+      .legendary {
+        background-color: purple;
+        color: white;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>技能種類與技能點數洗技模擬器</h1>
+    
+    <!-- 選擇角色與卡片類型 -->
+    <div class="option-group">
+      <label>角色選擇:
+         <input type="radio" name="role" value="batter"> 打者
+         <input type="radio" name="role" value="pitcher" checked> 投手
+      </label>
+    </div>
+    
+    <div class="option-group">
+      <label>卡片類型:
+         <input type="radio" name="cardType" value="normal" checked> 非傳說卡 (黑技出現機率 10%)
+         <input type="radio" name="cardType" value="legendary"> 傳說卡 (黑技出現機率 20%，且技能點數固定為 3 3 3)
+      </label>
+    </div>
+    
+    <!-- 單次洗技能 -->
+    <button id="rollBtn">洗技能 (單次)</button>
+    
+    <!-- 結果顯示區 -->
+    <div id="result"></div>
+    
+    <script>
+      /***************************************************
+       * 一、技能點數總和分布 (僅用於非傳說卡)
+       ***************************************************/
+      const totalPointsDistribution = [
+        { total: 3, probability: 0.039304 },
+        { total: 4, probability: 0.114444 },
+        { total: 5, probability: 0.225522 },
+        { total: 6, probability: 0.258093 },
+        { total: 7, probability: 0.218889 },
+        { total: 8, probability: 0.107811 },
+        { total: 9, probability: 0.035937 }
+      ];
+      
+      /***************************************************
+       * 二、技能種類資料
+       ***************************************************/
+      // 打者技能池（非傳說技能）
+      const batterBronzeSkills = ["代打專家", "鷹眼", "推打", "拉打", "左腕殺手", "右腕殺手", "守備將軍", "打點機器", "直球殺手", "集中力", "正面對決", "初球攻略"];
+      const batterSilverSkills = ["精密打擊", "揮大棒打者", "訓練上癮", "巨砲本能", "開路先鋒", "精疲力盡", "忍術", "下盤鍛鍊", "逆轉的力量", "勝負天性", "動物本能", "信賴", "克服弱點"];
+      const batterGoldSkills = ["雷射間", "王牌殺手", "超級強打", "五拍子球員", "超能神話", "預知能力", "盜壘天王", "打擊機器", "自走砲", "萬眾矚目", "超級輔助", "強化優點", "廣角打者"];
+      
+      // 投手技能池（非傳說技能）
+      const pitcherBronzeSkills = ["牽制王", "平靜", "佛祖保佑", "危機克服", "光速投球", "魔球大師", "左打殺手", "右打殺手", "鋼鐵人", "老謀深算", "強心臟", "冰凍"];
+      const pitcherSilverSkills = ["強力投手", "控球藝術家", "強打殺手", "國寶大師", "逆轉大師", "狙擊手", "野戰指揮", "投球機器", "布局", "乘勝追擊", "救火隊", "安全感", "調整節奏"];
+      const pitcherGoldSkills = ["決勝球", "巨人殺手", "自我解決", "大吃局數", "王牌", "最後大魔王", "無法觸碰", "鬥志", "技巧派投手", "壓倒性投手", "王牌終結者", "滾地球投手", "交錯之火", "投球協調者"];
+      
+      /***************************************************
+       * 通用傳說（黑技）技能池 - 根據角色區分
+       ***************************************************/
+      const commonLegendarySkills = [   // 投手傳說技能池
+        "完美先生", "工作馬", "投手默契", "合力投球", 
+        "牛棚日", "先守後攻", "精準控球", "速球型投手"
+      ];
+      
+      const commonLegendaryBatter = [   // 打者傳說技能池
+        "打者洞察力", "精準打擊", "壞球打者", "先鋒", 
+        "天生巨星", "機會製造者", "打者默契", "最強打者"
+      ];
+      
+      /***************************************************
+       * 三、輔助函式
+       ***************************************************/
+      // 根據總點數分布隨機取得總點數（非傳說卡）
+      function rollTotalPoints() {
+        let r = Math.random();
+        let cumulative = 0;
+        for (let i = 0; i < totalPointsDistribution.length; i++) {
+          cumulative += totalPointsDistribution[i].probability;
+          if (r < cumulative) return totalPointsDistribution[i].total;
+        }
+        // 若出現極端誤差就回傳最後一個
+        return totalPointsDistribution[totalPointsDistribution.length - 1].total;
+      }
+      
+      // 給定總點數，求出所有由 1、2、3 組成且和為 total 的三元組
+      function getPartitions(total) {
+        let partitions = [];
+        for (let i = 1; i <= 3; i++) {
+          for (let j = 1; j <= 3; j++) {
+            for (let k = 1; k <= 3; k++) {
+              if (i + j + k === total) partitions.push([i, j, k]);
+            }
+          }
+        }
+        return partitions;
+      }
+      
+      // 從所有可能的 partition 中隨機選一組
+      function choosePartition(total) {
+        let parts = getPartitions(total);
+        if (parts.length === 0) return [1, 1, 1];
+        let idx = Math.floor(Math.random() * parts.length);
+        return parts[idx];
+      }
+      
+      // 從技能池中抽取一個技能（避免重複）
+      function pickSkill(pool, chosen) {
+        let available = pool.filter(skill => chosen.indexOf(skill) === -1);
+        if (available.length === 0) available = pool;
+        return available[Math.floor(Math.random() * available.length)];
+      }
+      
+      // 根據角色與非黑技的技能階級取得技能池
+      function getNormalPool(role, tier) {
+        if (role === "batter") {
+          if (tier === "黃銅") return batterBronzeSkills;
+          if (tier === "炫銀") return batterSilverSkills;
+          if (tier === "炫金") return batterGoldSkills;
+        } else {
+          if (tier === "黃銅") return pitcherBronzeSkills;
+          if (tier === "炫銀") return pitcherSilverSkills;
+          if (tier === "炫金") return pitcherGoldSkills;
+        }
+        return [];
+      }
+      
+      // 根據角色從對應傳說技能池中抽取一個技能（避免重覆）
+      function pickLegendarySkill(role, chosen) {
+        let available;
+        if (role === "batter") {
+          available = commonLegendaryBatter.filter(skill => chosen.indexOf(skill) === -1);
+          if (available.length === 0) available = commonLegendaryBatter;
+        } else {
+          available = commonLegendarySkills.filter(skill => chosen.indexOf(skill) === -1);
+          if (available.length === 0) available = commonLegendarySkills;
+        }
+        return available[Math.floor(Math.random() * available.length)];
+      }
+      
+      // 根據技能階級設定 CSS 類別（用於「整格背景」）
+      function getTierClass(tier) {
+        if (tier === "炫金") return "gold";
+        if (tier === "炫銀") return "silver";
+        if (tier === "黃銅") return "bronze";
+        if (tier === "傳說") return "legendary";
+        return "";
+      }
+      
+      // sampleTier 函式：隨機回傳「黃銅」、「炫銀」、「炫金」三者之一
+      function sampleTier() {
+        let r = Math.random();
+        if (r < 1/3) return "黃銅";
+        else if (r < 2/3) return "炫銀";
+        else return "炫金";
+      }
+      
+      /***************************************************
+       * 四、洗技能主流程
+       ***************************************************/
+      function rollSkillCard() {
+        let role = document.querySelector('input[name="role"]:checked').value;
+        let cardType = document.querySelector('input[name="cardType"]:checked').value;
+        // 黑技機率：傳說卡=20%，非傳說卡=10%
+        let blackChance = (cardType === "legendary") ? 0.20 : 0.10;
+        let hasBlack = (Math.random() < blackChance);
+        
+        // (A) 技能種類 (tier) 抽取
+        let tiers = [];
+        if (hasBlack) {
+          // 黑技：第一排傳說、其餘兩排各自抽 tier
+          tiers.push("傳說");
+          tiers.push(sampleTier());
+          tiers.push(sampleTier());
+        } else {
+          // 非黑技：三排各抽 tier，若沒有炫金則強制補一個炫金
+          for (let i = 0; i < 3; i++) {
+            tiers.push(sampleTier());
+          }
+          if (!tiers.includes("炫金")) {
+            let index = Math.floor(Math.random() * 3);
+            tiers[index] = "炫金";
+          }
+        }
+        
+        // (B) 根據 tier 從技能池抽取技能
+        let chosenNames = [];
+        let typeResults = [];
+        for (let i = 0; i < 3; i++) {
+          let tier = tiers[i];
+          let skill = "";
+          if (tier === "傳說") {
+            skill = pickLegendarySkill(role, chosenNames);
+          } else {
+            let pool = getNormalPool(role, tier);
+            skill = pickSkill(pool, chosenNames);
+          }
+          chosenNames.push(skill);
+          typeResults.push({ tier: tier, skill: skill });
+        }
+        
+        // (C) 技能點數計算
+        let points;
+        if (cardType === "legendary") {
+          points = [3, 3, 3]; // 傳說卡固定
+        } else {
+          let totalPoints = rollTotalPoints();
+          points = choosePartition(totalPoints);
+        }
+        
+        // (D) 組合輸出
+        let card = [];
+        for (let i = 0; i < 3; i++) {
+          card.push({
+            skill: typeResults[i].skill,
+            tier: typeResults[i].tier,
+            points: points[i]
+          });
+        }
+        return card;
+      }
+      
+      // 顯示結果：讓整個儲存格使用 tier 的背景色
+      function displayResult(card, containerId) {
+        let container = document.getElementById(containerId);
+        container.innerHTML = "";
+        
+        let tbl = document.createElement("table");
+        let header = document.createElement("tr");
+        header.innerHTML = "<th>技能名稱 (及階級)</th><th>技能點數</th>";
+        tbl.appendChild(header);
+        
+        card.forEach(function(slot) {
+          let row = document.createElement("tr");
+          
+          // 第一欄：技能名稱+階級
+          let skillCell = document.createElement("td");
+          skillCell.classList.add(getTierClass(slot.tier)); // 套用背景色 class
+          skillCell.textContent = `${slot.skill} (${slot.tier})`;
+          
+          // 第二欄：技能點數
+          let pointCell = document.createElement("td");
+          pointCell.classList.add(getTierClass(slot.tier)); // 同樣套用背景色 class
+          pointCell.textContent = slot.points;
+          
+          row.appendChild(skillCell);
+          row.appendChild(pointCell);
+          tbl.appendChild(row);
+        });
+        
+        container.appendChild(tbl);
+      }
+      
+      /***************************************************
+       * 五、UI 互動
+       ***************************************************/
+      // 單次洗技能
+      document.getElementById("rollBtn").addEventListener("click", function() {
+        let card = rollSkillCard();
+        displayResult(card, "result");
+      });
+    </script>
+  </body>
+</html>
