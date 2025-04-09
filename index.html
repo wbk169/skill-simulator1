@@ -5,11 +5,24 @@
     <title>技能種類與技能點數洗技模擬器</title>
     <style>
       #legendChangeNormalBtn,
-#legendChangeLegendBtn {
-  background-color: orange;
-  color: white;
-}
-
+      #legendChangeLegendBtn,
+      #autoLegendChangeBtn {
+        background-color: orange;
+        color: white;
+      }
+      /* 歸零按鈕的額外樣式 */
+      #resetCounterBtn {
+        font-size: 24px;
+        background-color: red;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-top: 20px;
+        display: block;
+      }
+      
       body { font-family: Arial, sans-serif; margin: 20px; }
       h1 { margin-bottom: 10px; }
       .option-group { margin-bottom: 10px; }
@@ -22,6 +35,12 @@
       .silver { background-color: silver; color: black; }
       .bronze { background-color: #cd7f32; color: white; }
       .legendary { background-color: purple; color: white; }
+      /* 總和與訊息 */
+      .summary {
+        font-weight: bold;
+        margin-bottom: 10px;
+        font-size: 18px;
+      }
     </style>
   </head>
   <body>
@@ -50,9 +69,14 @@
     <button id="rollBtn">洗技能 (單次)</button>
     <button id="autoRollBtn">自動洗技能 (直到條件達成)</button>
     
-    <!-- 新增：傳說技能變更券按鈕（分 非傳說、傳說） -->
+    <!-- 傳說技能變更券按鈕 -->
     <button id="legendChangeNormalBtn">傳更非傳說卡</button>
     <button id="legendChangeLegendBtn">傳更傳說卡</button>
+    <!-- 新增自動傳更按鈕 (非傳說卡) -->
+    <button id="autoLegendChangeBtn">自動傳更 (非傳說卡)</button>
+    
+    <!-- 新增歸零按鈕，顯眼區 -->
+    <button id="resetCounterBtn">歸零洗牌次數</button>
     
     <!-- 結果顯示區 -->
     <div id="result"></div>
@@ -65,6 +89,8 @@
       
       /***************************************************
        * 一、技能點數分布（基本分布與最高技分布）
+       * 傳說技能變更券(傳更)採用 totalPointsDistribution，
+       * 點數範圍 3~9
        ***************************************************/
       const totalPointsDistribution = [
         { total: 3, probability: 0.039304 },
@@ -98,19 +124,19 @@
       /***************************************************
        * 二、技能種類資料
        ***************************************************/
-      const batterBronzeSkills = ["代打專家", "鷹眼", "推打", "拉打", "左腕殺手", "右腕殺手", "守備將軍", "打點機器", "直球殺手", "集中力", "正面對決", "初球攻略"];
+       const batterBronzeSkills = ["代打專家", "鷹眼", "推打", "拉打", "左腕殺手", "右腕殺手", "守備將軍", "打點機器", "直球殺手", "集中力", "正面對決", "初球攻略"];
       const batterSilverSkills = ["精密打擊", "揮大棒打者", "訓練上癮", "巨砲本能", "開路先鋒", "精疲力盡", "忍術", "下盤鍛鍊", "逆轉的力量", "勝負天性", "動物本能", "信賴", "克服弱點"];
-      const batterGoldSkills = ["雷射間", "王牌殺手", "超級強打", "五拍子球員", "超能神話", "預知能力", "盜壘天王", "打擊機器", "自走砲", "萬眾矚目", "超級輔助", "強化優點", "廣角打者"];
+      const batterGoldSkills = ["雷射間", "王牌殺手", "超級強打", "5拍子球員", "超能神話", "預知能力", "盜壘天王", "打擊機器", "自走砲", "萬眾矚目", "超級輔助", "強化優點", "廣角打者"];
       
       const pitcherBronzeSkills = ["牽制王", "平靜", "佛祖保佑", "危機克服", "光速投球", "魔球大師", "左打殺手", "右打殺手", "鋼鐵人", "老謀深算", "強心臟", "冰凍"];
-      const pitcherSilverSkills = ["強力投手", "控球藝術家", "強打殺手", "國寶大師", "逆轉大師", "狙擊手", "野戰指揮", "投球機器", "布局", "乘勝追擊", "救火隊", "安全感", "調整節奏"];
-      const pitcherGoldSkills = ["決勝球", "巨人殺手", "自我解決", "大吃局數", "王牌", "最後大魔王", "無法觸碰", "鬥志", "技巧派投手", "壓倒性投手", "王牌終結者", "滾地球投手", "交錯之火", "投球協調者"];
+      const pitcherSilverSkills = ["強力投手", "控球藝術家", "強打殺手", "國寶大師", "逆轉大師", "狙擊手", "野戰指揮", "投球G器", "布G", "乘勝追擊", "救火隊", "安全感", "調整節奏"];
+      const pitcherGoldSkills = ["決勝球", "G人殺手", "自我解決", "大吃G數", "王牌", "最後大魔王", "無法ture碰", "鬥志", "技巧派投手", "壓倒性投手", "王牌終結者", "滾地球投手", "交錯之火", "投球協調者"];
       
       /***************************************************
        * 三、傳說（黑技）技能池（依角色區分）
        ***************************************************/
-      const commonLegendarySkills = [ "完美先生", "工作馬", "投手默契", "合力投球", "牛棚日", "先守後攻", "精準控球", "速球型投手" ];
-      const commonLegendaryBatter = [ "打者洞察力", "精準打擊", "壞球打者", "先鋒", "天生巨星", "機會製造者", "打者默契", "最強打者" ];
+      const commonLegendarySkills = [ "完美小姐", "工作馬", "投手化學", "合力投球", "牛棚日", "先守後攻", "精準控球", "速球型投手" ];
+      const commonLegendaryBatter = [ "打者洞察力", "精準打擊", "壞球打者", "先鋒", "天生G星", "機會命運製造者", "打者默契", "最猛打者" ];
       
       /***************************************************
        * 四、輔助函式
@@ -271,20 +297,24 @@
       
       /***************************************************
        * 七、傳說技能變更券的洗牌流程
-       * 與最高技流程類似，但黑技機率固定為100%
+       * 傳說技能變更券（傳更）
+       * 的點數出現機率採用 totalPointsDistribution，
+       * 點數範圍固定在 3~9。
+       * 模式說明：
+       * - 非傳說卡模式：根據機率決定點數。
+       * - 傳說卡模式：固定使用 [3,3,3]，總點數必定為 9。
        ***************************************************/
       function rollLegendChangeCard(isLegendType) {
-        // isLegendType: 若 true，則採固定點數 [3,3,3]；否則採用 highestPointsDistribution
-        totalRolls++;  // 全局計數增加
+        totalRolls++;  // 累計洗牌次數增加
         let role = document.querySelector('input[name="role"]:checked').value;
-        // 這邊黑技出現機率固定100%
-        let blackChance = 1.0;
+        let blackChance = 1.0;  // 固定100%
         let useFixedPoints = isLegendType ? true : false;
         let totalPoints;
         if (!useFixedPoints) {
-          totalPoints = rollPoints(highestPointsDistribution);
+          // 使用 totalPointsDistribution 來決定點數
+          totalPoints = rollPoints(totalPointsDistribution);
         }
-        // 因為機率100%，第一排一定為傳說
+        // 第一排固定為傳說
         let tiers = [];
         tiers.push("傳說");
         tiers.push(sampleTier());
@@ -321,11 +351,49 @@
       }
       
       /***************************************************
-       * 八、顯示結果
+       * 八、自動傳更功能 (非傳說卡模式)
+       * 直到三排技能總點數>=使用者指定值
+       ***************************************************/
+      function autoLegendChangeUntilAsync(minTotal, callback, isLegendType = false) {
+        let startRolls = totalRolls;
+        function rollAndCheck() {
+          let card = rollLegendChangeCard(isLegendType);
+          let sum = card.reduce((acc, slot) => acc + slot.points, 0);
+          if (sum >= minTotal) {
+            let autoCount = totalRolls - startRolls;
+            callback(card, sum, autoCount);
+          } else {
+            setTimeout(rollAndCheck, 0);
+          }
+        }
+        rollAndCheck();
+      }
+      
+      /***************************************************
+       * 九、顯示結果
+       * 除了技能表格，會在最上方顯示：
+       * 1. 技能點數總和
+       * 2. 額外的訊息（例如累計洗牌次數或自動試次）
        ***************************************************/
       function displayResult(card, containerId, extraInfo="") {
         let container = document.getElementById(containerId);
         container.innerHTML = "";
+        
+        // 計算技能點數總和
+        let totalSum = card.reduce((acc, slot) => acc + slot.points, 0);
+        let sumDiv = document.createElement("div");
+        sumDiv.className = "summary";
+        sumDiv.textContent = "技能點數總和：" + totalSum;
+        container.appendChild(sumDiv);
+        
+        // 顯示額外訊息，如累計洗牌次數或自動試次數
+        if(extraInfo) {
+          let infoDiv = document.createElement("div");
+          infoDiv.style.marginBottom = "10px";
+          infoDiv.textContent = extraInfo;
+          container.appendChild(infoDiv);
+        }
+        
         let tbl = document.createElement("table");
         let header = document.createElement("tr");
         header.innerHTML = "<th>技能名稱 (及階級)</th><th>技能點數</th>";
@@ -342,25 +410,20 @@
           row.appendChild(pointCell);
           tbl.appendChild(row);
         });
-        if (extraInfo) {
-          let infoDiv = document.createElement("div");
-          infoDiv.style.marginTop = "10px";
-          infoDiv.textContent = extraInfo;
-          container.appendChild(infoDiv);
-        }
         container.appendChild(tbl);
       }
       
       /***************************************************
-       * 九、UI 互動事件
+       * 十、UI 互動事件
        ***************************************************/
+      // 洗技能 (單次)
       document.getElementById("rollBtn").addEventListener("click", function() {
         let card = rollSkillCard();
-        displayResult(card, "result");
+        displayResult(card, "result", "累計洗牌次數：" + totalRolls);
       });
       
+      // 自動洗技能 (直到條件達成)
       document.getElementById("autoRollBtn").addEventListener("click", function() {
-        // 根據所選卡片類型設定有效範圍
         let cardType = document.querySelector('input[name="cardType"]:checked').value;
         let minAllowed, maxAllowed;
         if(cardType === "highestNormal" || cardType === "highestLegend"){
@@ -388,20 +451,39 @@
         let prevTotal = totalRolls;
         autoRollUntilAsync(minTotal, function(card, sum) {
           let autoCount = totalRolls - prevTotal;
-          displayResult(card, "result", "自動洗技能次數：" + autoCount + "，三排技能總和：" + sum);
+          displayResult(card, "result", "自動洗技能次數：" + autoCount + "，累計洗牌次數：" + totalRolls + "，技能總點數：" + sum);
         });
       });
       
-      // 傳說技能變更券：傳更非傳說卡（點數採 highest 分布）
+      // 傳說技能變更券：傳更非傳說卡（點數採用 totalPointsDistribution）
       document.getElementById("legendChangeNormalBtn").addEventListener("click", function() {
         let card = rollLegendChangeCard(false);
-        displayResult(card, "result", "傳說技能變更券 (非傳說卡)");
+        displayResult(card, "result", "累計洗牌次數：" + totalRolls);
       });
       
       // 傳說技能變更券：傳更傳說卡（固定點數 [3,3,3]）
       document.getElementById("legendChangeLegendBtn").addEventListener("click", function() {
         let card = rollLegendChangeCard(true);
-        displayResult(card, "result", "傳說技能變更券 (傳說卡)");
+        displayResult(card, "result", "累計洗牌次數：" + totalRolls);
+      });
+      
+      // 自動傳更 (非傳說卡模式)
+      document.getElementById("autoLegendChangeBtn").addEventListener("click", function() {
+        let input = prompt("請輸入您希望技能總點數至少幾點？(範圍 3~9)：");
+        if(input === null) return;
+        let minTotal = parseInt(input);
+        if(isNaN(minTotal)) { alert("請輸入數字！"); return; }
+        let prevTotal = totalRolls;
+        autoLegendChangeUntilAsync(minTotal, function(card, sum, autoCount) {
+          displayResult(card, "result", "自動傳更次數：" + autoCount + "，累計洗牌次數：" + totalRolls + "，技能總點數：" + sum);
+        }, false);  // false 表示非傳說卡模式
+      });
+      
+      // 歸零洗牌次數按鈕
+      document.getElementById("resetCounterBtn").addEventListener("click", function() {
+        totalRolls = 0;
+        let container = document.getElementById("result");
+        container.innerHTML = "<div class='summary'>洗牌次數已歸零！</div>";
       });
     </script>
   </body>
