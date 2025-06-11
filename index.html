@@ -486,17 +486,17 @@
         container.innerHTML = "<div class='summary'>洗牌次數已歸零！</div>";
       });
     </script>
-    <!-- －－－－－－★ 黑技統計＋黑技保護＋固定次數自動洗  v3 ★－－－－－－ -->
-<script>
+<!-- －－－－－－★ 黑技統計＋固定次數自動洗  v4 ★－－－－－－ -->
+<script data-black-v4>
   (function () {
     /***************************************************
-     * A. 若已插入舊版 <script>，先自動移除避免重複
+     * 0. 如有舊版 <script data-black-v3> 先移除
      ***************************************************/
-    const old = document.querySelector("script[data-black-v2]");
-    if (old) old.remove();   // 清掉舊版（若不存在則無影響）
+    const old = document.querySelector("script[data-black-v3]");
+    if (old) old.remove();
   
     /***************************************************
-     * B. 統計區塊
+     * 1. UI：統計區塊
      ***************************************************/
     let statsDiv = document.getElementById("blackStats");
     if (!statsDiv) {
@@ -507,21 +507,37 @@
     }
   
     /***************************************************
-     * C. 統計資料與函式（僅 8 點、9 點）
+     * 2. 統計資料結構
      ***************************************************/
-    const blackPointStats = { 8: 0, 9: 0 };
+    const blackPointStats = { 8: 0, 9: 0 };            // 次數統計
+    const comboStats      = {};                         // 組合統計
+  
+    function comboKey(card, sum) {
+      // 例：王牌+決勝球+救火隊+9
+      return `${card[0].skill}+${card[1].skill}+${card[2].skill}+${sum}`;
+    }
   
     function recordBlackStats(card) {
       const hasBlack = card.some((s) => s.tier === "傳說");
       if (!hasBlack) return;
+  
       const sum = card.reduce((acc, s) => acc + s.points, 0);
-      if (sum >= 8) {
-        blackPointStats[sum === 9 ? 9 : 8]++;
-      }
+      if (sum < 8) return;           // 只記 8/9 點
+  
+      const bucket = sum === 9 ? 9 : 8;
+      blackPointStats[bucket]++;
+  
+      const key = comboKey(card, sum);
+      comboStats[key] = (comboStats[key] || 0) + 1;
     }
   
+    /***************************************************
+     * 3. 統計渲染
+     ***************************************************/
     function renderBlackStats() {
       const total = totalRolls || 1;
+  
+      /* (1) 整體 8 / 9 點次數表 */
       let html =
         "<h3>黑技高點數統計（總點數 ≥ 8）</h3>" +
         "<table><tr><th>總點數</th><th>次數</th><th>機率</th></tr>";
@@ -530,104 +546,128 @@
         html += `<tr><td>${pt}</td><td>${blackPointStats[pt]}</td><td>${prob}%</td></tr>`;
       });
       html += "</table>";
+  
+      /* (2) 組合列表（依次數由高到低） */
+      const combos = Object.entries(comboStats)
+        .sort((a, b) => b[1] - a[1]);       // 次數降序
+      if (combos.length) {
+        html += "<h4 style='margin-top:15px'>高點黑技組合列表</h4>";
+        html += "<table><tr><th>組合</th><th>次數</th></tr>";
+        combos.forEach(([k, v]) => {
+          html += `<tr><td>${k}</td><td>${v}</td></tr>`;
+        });
+        html += "</table>";
+      }
+  
       statsDiv.innerHTML = html;
     }
   
     /***************************************************
-     * D. 黑技保護（單次洗才需確認）
+     * 4. 保護機制（單次洗才需要）
      ***************************************************/
     let protectedBlack = false;
-    const oldDisplayResult = window.displayResult;
+    const baseDisplayResult = window.displayResult;   // 原本的函式
+    let suppressRecord = false;                       // 避免重複計數用
+  
     window.displayResult = function (card, containerId, extraInfo = "") {
-      oldDisplayResult(card, containerId, extraInfo);   // 原本渲染
-      recordBlackStats(card);
+      baseDisplayResult(card, containerId, extraInfo);   // 原始渲染
+  
+      // 若非「抑制模式」才寫統計，防止重複
+      if (!suppressRecord) recordBlackStats(card);
       renderBlackStats();
+  
       const hasBlack = card.some((s) => s.tier === "傳說");
-      const sum = card.reduce((acc, s) => acc + s.points, 0);
+      const sum      = card.reduce((acc, s) => acc + s.points, 0);
       protectedBlack = hasBlack && sum >= 8;
     };
   
+    // 單次洗保護對話
     const rollBtn = document.getElementById("rollBtn");
     rollBtn.addEventListener(
       "click",
       function (e) {
-        if (protectedBlack) {
-          if (!confirm("目前已有 8 點以上黑技，確定要洗掉嗎？")) {
-            e.stopImmediatePropagation();
-            e.preventDefault();
-            return;
-          }
-          protectedBlack = false;
+        if (protectedBlack &&
+            !confirm("目前已有 8 點以上黑技，確定要洗掉嗎？")) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          return;
         }
+        protectedBlack = false;   // 使用者選「是」→ 解除保護
       },
       true
     );
   
     /***************************************************
-     * E. 歸零洗牌次數 ⇒ 同步清空統計
+     * 5. 歸零按鈕：同步清空統計
      ***************************************************/
-    const resetBtn = document.getElementById("resetCounterBtn");
-    resetBtn.addEventListener("click", function () {
-      blackPointStats[8] = 0;
-      blackPointStats[9] = 0;
-      protectedBlack = false;
-      renderBlackStats();
-    });
+    document
+      .getElementById("resetCounterBtn")
+      .addEventListener("click", () => {
+        blackPointStats[8] = 0;
+        blackPointStats[9] = 0;
+        for (const k in comboStats) delete comboStats[k];
+        protectedBlack = false;
+        renderBlackStats();
+      });
   
     /***************************************************
-     * F. ★ 新功能：固定次數「自動洗技能」 ★
-     *    1. 動態新增按鈕
-     *    2. 連續洗 N 次，更新統計並於完成時顯示最後一張卡
+     * 6. ★ 新功能：固定次數「自動洗技能」 ★
      ***************************************************/
-    // 1. 建立新按鈕
-    const autoRollBtn = document.getElementById("autoRollBtn");
-    const timesBtn = document.createElement("button");
-    timesBtn.id = "autoRollTimesBtn";
-    timesBtn.textContent = "自動洗技能 (跑 N 次)";
-    timesBtn.style.marginLeft = "8px";
-    autoRollBtn.insertAdjacentElement("afterend", timesBtn);
+    // 如果上次已建立按鈕就不重複建立
+    if (!document.getElementById("autoRollTimesBtn")) {
+      const autoRollBtn = document.getElementById("autoRollBtn");
+      const timesBtn    = document.createElement("button");
+      timesBtn.id       = "autoRollTimesBtn";
+      timesBtn.textContent = "自動洗技能 (跑 N 次)";
+      timesBtn.style.marginLeft = "8px";
+      autoRollBtn.insertAdjacentElement("afterend", timesBtn);
   
-    // 2. 監聽事件
-    timesBtn.addEventListener("click", function () {
-      const input = prompt("要自動洗幾次？請輸入正整數：");
-      if (input === null) return;
-      const times = parseInt(input, 10);
-      if (!Number.isInteger(times) || times <= 0) {
-        alert("請輸入正整數！");
-        return;
-      }
+      // 監聽
+      timesBtn.addEventListener("click", () => {
+        const input = prompt("要自動洗幾次？請輸入正整數：");
+        if (input === null) return;
+        const N = parseInt(input, 10);
+        if (!Number.isInteger(N) || N <= 0) {
+          alert("請輸入正整數！");
+          return;
+        }
   
-      let done = 0;
-      let lastCard = null;
+        let done = 0;
+        let lastCard;
   
-      function loop() {
-        // 單次洗
-        lastCard = window.rollSkillCard();
-        recordBlackStats(lastCard);
+        suppressRecord = true;  // 先開啟抑制，避免最後一張重複計數
   
-        done++;
-        if (done >= times) {
-          // 完成
-          window.displayResult(
-            lastCard,
-            "result",
-            `自動洗技能次數：${times}，累計洗牌次數：${totalRolls}`
-          );
-          renderBlackStats();
-        } else {
-          // 每 100 次讓出控制權，避免阻塞 UI
-          if (done % 100 === 0) {
-            setTimeout(loop, 0);
+        function loop() {
+          lastCard = window.rollSkillCard();
+          recordBlackStats(lastCard);  // 只在這裡計一次
+          done++;
+  
+          // 每 200 次放一次 event loop，避免長時間阻塞畫面
+          if (done < N) {
+            if (done % 200 === 0) {
+              setTimeout(loop, 0);
+            } else {
+              loop();
+            }
           } else {
-            loop();
+            // 完成：顯示最後一張
+            suppressRecord = true;     // 顯示時仍抑制
+            window.displayResult(
+              lastCard,
+              "result",
+              `自動洗技能次數：${N}，累計洗牌次數：${totalRolls}`
+            );
+            suppressRecord = false;
+            renderBlackStats();
           }
         }
-      }
-      loop();
-    });
+        loop();
+      });
+    }
   })();
   </script>
-  <!-- －－－－－－★  v3  end ★－－－－－－ -->
+  <!-- －－－－－－★ v4 end ★－－－－－－ -->
+  
   
   </body>
 </html>
